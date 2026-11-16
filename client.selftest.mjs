@@ -909,6 +909,25 @@ check("ResultPane renders Markdown text results as formatted blocks", () => {
   assert(text.includes("复制正文"), "copy action")
 })
 
+check("OutputRow shows a size-capped result", () => {
+  const capped = { id: "f_1", name: "merged.pdf", kind: "pdf", bytes: 300000, pages: 2, originalBytes: 900000, targetBytes: 400000, targetReached: true }
+  const tree = render(T.components.OutputRow, { output: capped, jobId: "j_9" })
+  const text = textOf(tree)
+  const classes = classesOf(tree)
+  assert(text.includes("已压缩"), "compressed label shown")
+  assert(text.includes("合并") || text.includes("merged.pdf"), "file name shown")
+  assert(classes.some((value) => value.includes("pdfw-badge--success")), "success badge for a met target")
+
+  const missed = { ...capped, bytes: 460000, targetReached: false }
+  const missedTree = render(T.components.OutputRow, { output: missed, jobId: "j_9" })
+  assert(textOf(missedTree).includes("未达到目标体积"), "unmet target is called out")
+  assert(classesOf(missedTree).some((value) => value.includes("pdfw-badge--danger")), "danger badge for an unmet target")
+
+  const plain = { id: "f_2", name: "out.pdf", kind: "pdf", bytes: 12000, pages: 1 }
+  const plainText = textOf(render(T.components.OutputRow, { output: plain, jobId: "j_9" }))
+  assert(!plainText.includes("已压缩"), "no compression label without an audit")
+})
+
 check("ResultPane renders a failed job with retry", () => {
   const op = resizeOp
   const job = { id: "j_4", status: "failed", progress: 0, inputs: [{ name: "a.pdf", size: 10 }], items: [], outputs: [], error: { code: "NEED_PASSWORD", message: "该 PDF 已加密", hint: "填写密码后重试" } }

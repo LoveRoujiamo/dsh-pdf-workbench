@@ -32,7 +32,7 @@ PYROOT="$(python_root)" || {
 export PYTHONHOME="$PYROOT"
 export PDFW_PYLIB="$(runtime_target)/pylib"
 
-echo "== engine self-test (23 operations)"
+echo "== engine self-test (46 checks over 23 operations)"
 "$(engine_python)" engine/selftest.py
 
 echo "== host integration"

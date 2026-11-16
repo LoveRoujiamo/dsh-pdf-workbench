@@ -29,7 +29,7 @@ window.__ModuleLoader__.load({
 
     /** Bumped on every client change: the only reliable way to tell which
      *  bundle the page is running (the module is loaded once per page load). */
-    var CLIENT_BUILD = "v1.1.2"
+    var CLIENT_BUILD = "v1.2.0"
 
     var API_BASE = "/api/pdf-workbench"
 
@@ -274,6 +274,9 @@ window.__ModuleLoader__.load({
         "result.chatPlaceholder": "继续追问；Enter 发送，Shift+Enter 换行",
         "result.chatLabel": "追问内容",
         "result.warningsTitle": "以下项目需要注意（结果仍然生成）",
+        "result.compressed": "已压缩 {from} → {to}",
+        "result.capMissed": "未达到目标体积",
+        "result.capBadge": "已压缩",
         "result.chatSend": "发送",
         "result.chatThinking": "正在思考…",
         "result.chatYou": "你",
@@ -465,6 +468,9 @@ window.__ModuleLoader__.load({
         "result.chatPlaceholder": "Ask a follow-up; Enter sends, Shift+Enter adds a line",
         "result.chatLabel": "Follow-up question",
         "result.warningsTitle": "Completed with notes",
+        "result.compressed": "Compressed {from} → {to}",
+        "result.capMissed": "Target not reached",
+        "result.capBadge": "Compressed",
         "result.chatSend": "Send",
         "result.chatThinking": "Thinking…",
         "result.chatYou": "You",
@@ -2710,6 +2716,8 @@ window.__ModuleLoader__.load({
       var jobId = props.jobId
       var kind = previewKindFor(output)
       var url = ENDPOINTS.file(jobId, output.id, false)
+      var originalBytes = Number(output.originalBytes) || 0
+      var capped = originalBytes > 0 && originalBytes > Number(output.bytes || 0)
       return h(
         "article",
         { className: "pdfw-output" },
@@ -2725,9 +2733,13 @@ window.__ModuleLoader__.load({
               "span",
               { className: "pdfw-output-sub" },
               formatBytes(output.bytes),
-              output.pages ? " · " + t("result.pages", { n: output.pages }) : ""
+              output.pages ? " · " + t("result.pages", { n: output.pages }) : "",
+              capped && originalBytes
+                ? " · " + t("result.compressed", { from: formatBytes(originalBytes), to: formatBytes(output.bytes) })
+                : ""
             )
           ),
+          capped ? h(Badge, { tone: output.targetReached === false ? "danger" : "success" }, output.targetReached === false ? t("result.capMissed") : t("result.capBadge")) : null,
           h(Badge, { tone: "muted" }, kindBadge(output.kind)),
           h(
             "a",

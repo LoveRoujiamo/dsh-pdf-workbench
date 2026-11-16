@@ -178,6 +178,7 @@ def total_bytes(outputs):
     return sum(int(output.get('bytes') or 0) for output in outputs)
 
 
+
 def open_output_pdf(path, expected_pages=None):
     expect(os.path.isfile(path), 'output PDF is missing: %s' % path)
     expect(os.path.getsize(path) > 200, 'output PDF is suspiciously small: %s' % path)
@@ -635,6 +636,73 @@ def t_merge():
     expect('附录' in last_page, 'merged file lost the second document')
     expect(len(toc) >= 2, 'merged file has only %d bookmark entries' % len(toc))
     return 'pages=5 bookmarks=%d' % len(toc), total_bytes(outputs)
+
+
+def t_merge_size_cap():
+    """Merging with a size cap must deliver the capped file in the same job."""
+    target_mb = 0.3
+    report, _out = run_op('merge', {
+        'addBookmarks': True, 'limitSize': True, 'targetSizeMB': target_mb},
+        inputs=[SAMPLE, BIG_IMAGE], tag='merge-size-cap', timeout=1200)
+    result = ok_result(report, 'merge with size cap')
+    outputs = outputs_with_kind(result, 'pdf')
+    expect(len(outputs) == 1, 'merge+cap produced %d PDFs' % len(outputs))
+    output = outputs[0]
+    target = int(round(target_mb * 1024 * 1024))
+    after = int(output.get('bytes') or 0)
+    before = int(output.get('originalBytes') or 0)
+    expect(before > 0, 'merge+cap did not report originalBytes')
+    expect(output.get('targetBytes') == target,
+           'merge+cap targetBytes=%r, expected %d' % (output.get('targetBytes'), target))
+    expect(after <= target, 'merge+cap output %d bytes exceeds target %d' % (after, target))
+    expect(output.get('targetReached') is True, 'merge+cap did not reach the target')
+    expect(after < before, 'merge+cap did not shrink (%d -> %d)' % (before, after))
+    doc = open_output_pdf(output['path'], expected_pages=4)
+    text = doc[0].get_text().strip()
+    doc.close()
+    expect(bool(text), 'merge+cap lost the text layer (must stay vector)')
+    return ('merged+cap %s -> %s target %s'
+            % (fmt_size(before), fmt_size(after), fmt_size(target))), total_bytes(outputs)
+
+
+def t_compress_target():
+    """The dedicated compress tool can target a size instead of a level."""
+    target_mb = 0.4
+    report, _out = run_op('compress', {'mode': 'target', 'targetSizeMB': target_mb},
+                          inputs=[BIG_IMAGE], tag='compress-target', timeout=1200)
+    result = ok_result(report, 'compress to target')
+    outputs = outputs_with_kind(result, 'pdf')
+    expect(len(outputs) == 1, 'compress target produced %d PDFs' % len(outputs))
+    target = int(round(target_mb * 1024 * 1024))
+    after = int(outputs[0].get('bytes') or 0)
+    expect(after <= target, 'compress target output %d bytes exceeds %d' % (after, target))
+    expect(outputs[0].get('targetReached') is True, 'compress target did not reach the target')
+    return 'target %s -> %s' % (fmt_size(target), fmt_size(after)), total_bytes(outputs)
+
+
+def t_batch_resize_size_cap():
+    """A capped batch must cap every file and bundle the capped copies."""
+    target_mb = 0.5
+    report, _out = run_op('batchResize', {
+        'sizePreset': 'A4', 'fitMode': 'scale', 'orientation': 'auto',
+        'zipOutput': True, 'limitSize': True, 'targetSizeMB': target_mb},
+        inputs=[BIG_IMAGE, BIG_IMAGE], tag='batchResize-cap', timeout=1800)
+    result = ok_result(report, 'batchResize with size cap')
+    target = int(round(target_mb * 1024 * 1024))
+    pdfs = outputs_with_kind(result, 'pdf')
+    expect(len(pdfs) == 2, 'batchResize+cap produced %d PDFs' % len(pdfs))
+    for output in pdfs:
+        expect(int(output.get('bytes') or 0) <= target,
+               'batchResize+cap output %d exceeds %d' % (output.get('bytes'), target))
+    archives = outputs_with_kind(result, 'zip')
+    expect(len(archives) == 1, 'batchResize+cap did not bundle a zip')
+    with zipfile.ZipFile(archives[0]['path']) as archive:
+        inner = [entry for entry in archive.infolist() if entry.filename.lower().endswith('.pdf')]
+        sizes = [entry.file_size for entry in inner]
+    expect(len(inner) == 2, 'batch zip holds %d PDFs, expected 2' % len(inner))
+    expect(all(size <= target for size in sizes),
+           'batch zip still holds uncapped files: %r vs %d' % (sizes, target))
+    return 'capped 2 files + zip <= %s' % fmt_size(target), total_bytes(outputs_of(result))
 
 
 def t_split_ranges():
@@ -1388,6 +1456,9 @@ def main():
     test('op/pdf2text', t_pdf2text)
     test('op/toPDF', t_toPDF)
     test('op/merge', t_merge)
+    test('op/merge (size cap)', t_merge_size_cap)
+    test('op/compress (to target)', t_compress_target)
+    test('op/batchResize (size cap)', t_batch_resize_size_cap)
     test('op/split (ranges)', t_split_ranges)
     test('op/split (every)', t_split_every)
     test('op/split (size)', t_split_size)

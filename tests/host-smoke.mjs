@@ -128,6 +128,11 @@ console.log('\n1. catalog')
     'ai.qa',
   ].every((id) => ids.has(id)))
   check('limits 100MB / 20 files', body.value.limits.maxFileBytes === 104857600 && body.value.limits.maxBatchFiles === 20)
+  const withSizeCap = ['edit.merge', 'convert.toPDF', 'page.batchResize']
+  check('size-cap switch exposed on every bulk PDF op',
+    withSizeCap.every((id) => (ops.find((entry) => entry.id === id)?.fields ?? []).some((field) => field.key === 'limitSize')),
+    JSON.stringify(withSizeCap.map((id) => [id, (ops.find((o) => o.id === id)?.fields ?? []).map((f) => f.key)])))
+  check('compress tool offers its own target mode', (ops.find((entry) => entry.id === 'edit.compress')?.fields ?? []).some((field) => field.key === 'targetSizeMB'))
 }
 
 console.log('\n2. info')
@@ -322,6 +327,24 @@ if (withEngine) {
     check('crop on a blank page still completes', snapshot?.status === 'done', JSON.stringify(snapshot?.error))
     check('snapshot always carries a warnings array', Array.isArray(snapshot?.warnings), JSON.stringify(snapshot?.warnings))
     check('blank-page note is surfaced', (snapshot?.warnings ?? []).length > 0, JSON.stringify(snapshot?.warnings))
+  }
+
+  console.log('\n5c. output size cap reaches the engine and the browser')
+  {
+    const form = new FormData()
+    form.set('op', 'edit.merge')
+    form.set('params', JSON.stringify({ addBookmarks: true, limitSize: true, targetSizeMB: 0.3 }))
+    form.append('file', new File([srcBytes], 'a.pdf', { type: 'application/pdf' }))
+    form.append('file', new File([srcBytes], 'b.pdf', { type: 'application/pdf' }))
+    const created = await call('POST', '/api/pdf-workbench/jobs', { body: form })
+    const snapshot = await waitJob(created.body?.value?.jobId)
+    check('size-capped merge completes', snapshot?.status === 'done', JSON.stringify(snapshot?.error))
+    const out = snapshot?.outputs?.[0]
+    const target = Math.round(0.3 * 1024 * 1024)
+    check('target size reaches the engine', out?.targetBytes === target, JSON.stringify(out?.targetBytes))
+    check('result reports whether the target was met', out?.targetReached === true, JSON.stringify(out?.targetReached))
+    check('audit carries the pre-cap size', Number(out?.originalBytes) >= Number(out?.bytes), JSON.stringify([out?.originalBytes, out?.bytes]))
+    check('output honours the cap', Number(out?.bytes) <= target, JSON.stringify([out?.bytes, target]))
   }
 
   console.log('\n6. retention + cancellation')

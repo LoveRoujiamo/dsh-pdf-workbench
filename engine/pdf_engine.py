@@ -1608,7 +1608,10 @@ def op_toPDF(ctx):
                     target = out_path(ctx, base_of(name), '', 'pdf')
                     shutil.copyfile(pdf_path, target)
                     pages = verify_pdf(target)
-                    items.append(make_item(name, [pdf_record(ctx, target, pages)]))
+                    fit = _apply_size_cap(ctx, target)
+                    record = pdf_record(ctx, target, pages)
+                    _attach_fit(record, fit)
+                    items.append(make_item(name, [record]))
             except Exception as exc:
                 items.append(make_item(name, [], error_of(exc)))
             page_progress(index, len(pairs), '正在转换 %s' % os.path.basename(name))
@@ -1638,7 +1641,10 @@ def op_toPDF(ctx):
                     save_pdf(merged, target)
                 finally:
                     merged.close()
-                items.append(make_item(os.path.basename(target), [pdf_record(ctx, target, pages)]))
+                fit = _apply_size_cap(ctx, target)
+                record = pdf_record(ctx, target, pages)
+                _attach_fit(record, fit)
+                items.append(make_item(os.path.basename(target), [record]))
         return items
     finally:
         shutil.rmtree(tmpdir, ignore_errors=True)
@@ -1699,7 +1705,10 @@ def op_merge(ctx):
         target = out_path(ctx, base_of(pairs[0][1]), '_merged', 'pdf')
         pages = merged.page_count
         save_pdf(merged, target)
-        items.insert(0, make_item('合并结果.pdf', [pdf_record(ctx, target, pages)]))
+        fit = _apply_size_cap(ctx, target)
+        record = pdf_record(ctx, target, pages)
+        _attach_fit(record, fit)
+        items.insert(0, make_item('合并结果.pdf', [record]))
         return items
     finally:
         try:
@@ -1900,17 +1909,222 @@ def _resample_images(doc, max_dim, quality, ctx):
     return changed
 
 
+def _largest_image_side(doc):
+    """Largest raster dimension in the document, or 0 when it has no images."""
+    largest = 0
+    seen = set()
+    for pno in range(doc.page_count):
+        try:
+            images = doc[pno].get_images(full=True)
+        except Exception:
+            continue
+        for info in images:
+            try:
+                xref = int(info[0])
+            except (IndexError, TypeError, ValueError):
+                continue
+            if xref in seen:
+                continue
+            seen.add(xref)
+            try:
+                raw = doc.extract_image(xref)
+            except Exception:
+                continue
+            largest = max(largest, int(raw.get('width') or 0), int(raw.get('height') or 0))
+    return largest
+
+
+# Each pass is (absolute pixel cap, share of the largest image, JPEG quality).
+# Starting mild keeps quality when the target is only slightly below the source;
+# the later passes are progressively more aggressive for mail-size caps.
+FIT_STEPS = (
+    (3000, 0.90, 88),
+    (2000, 0.65, 80),
+    (1400, 0.48, 70),
+    (950, 0.34, 58),
+    (650, 0.24, 46),
+    (450, 0.16, 34),
+)
+
+
+def _target_bytes(ctx):
+    mb = clamp(ctx.number('targetSizeMB', 10), 0.05, 500)
+    return int(round(mb * 1024 * 1024))
+
+
+def _fit_pdf_to_target(ctx, path, target_bytes, password=None):
+    """Shrink an already-written PDF to *target_bytes* where the content allows.
+
+    Only raster images are resampled; text and vector art are left intact, so a
+    target cap never turns a searchable document into a scan. If even the most
+    aggressive pass cannot reach the target the smallest valid result is kept
+    and the caller surfaces a warning instead of pretending the cap succeeded.
+    """
+    target_bytes = int(max(0, target_bytes or 0))
+    try:
+        before = os.path.getsize(path)
+    except OSError:
+        before = 0
+    info = {
+        'originalBytes': before,
+        'targetBytes': target_bytes,
+        'bytes': before,
+        'targetReached': True,
+        'passes': 0,
+    }
+    if target_bytes <= 0 or before <= target_bytes:
+        return info
+
+    try:
+        probe = open_pdf(path, password)
+        try:
+            largest = _largest_image_side(probe)
+        finally:
+            probe.close()
+    except Exception as exc:
+        ctx.warn('无法检查图片以压缩输出：%s' % exc)
+        info['targetReached'] = False
+        return info
+
+    if largest <= 0:
+        info['targetReached'] = False
+        ctx.warn('输出仍为 %s（目标 %s）：文档没有可降采样的图片，文字与矢量内容无法再压缩'
+                 % (_fmt_bytes(before), _fmt_bytes(target_bytes)))
+        return info
+
+    steps = []
+    for cap, share, quality in FIT_STEPS:
+        dimension = int(min(cap, max(1, round(largest * share))))
+        if steps and dimension >= steps[-1][0]:
+            continue
+        steps.append((dimension, quality))
+
+    out_dir = ctx.ensure_out_dir()
+    best_path = None
+    best_size = before
+    attempts = 0
+    for index, (dimension, quality) in enumerate(steps):
+        attempts += 1
+        progress(0.93, '正在压缩到目标体积（第 %d 次）' % attempts)
+        candidate = os.path.join(out_dir, '.fit-%d-%d.pdf' % (os.getpid(), index))
+        try:
+            if os.path.exists(candidate):
+                os.remove(candidate)
+            doc = open_pdf(path, password)
+            try:
+                _resample_images(doc, dimension, quality, ctx)
+                save_pdf(doc, candidate)
+            finally:
+                doc.close()
+            size = os.path.getsize(candidate)
+        except Exception as exc:
+            ctx.warn('第 %d 次自动压缩失败：%s' % (attempts, exc))
+            try:
+                if os.path.exists(candidate):
+                    os.remove(candidate)
+            except OSError:
+                pass
+            continue
+        if size < best_size:
+            if best_path:
+                try:
+                    os.remove(best_path)
+                except OSError:
+                    pass
+            best_path = candidate
+            best_size = size
+        else:
+            try:
+                os.remove(candidate)
+            except OSError:
+                pass
+        if best_size <= target_bytes:
+            break
+
+    if best_path:
+        try:
+            verify_pdf(best_path)
+        except EngineError as exc:
+            ctx.warn('压缩结果校验失败，保留原始输出：%s' % exc)
+            try:
+                os.remove(best_path)
+            except OSError:
+                pass
+            best_path = None
+    if best_path:
+        try:
+            os.replace(best_path, path)
+        except OSError as exc:
+            ctx.warn('写入压缩结果失败，保留原始输出：%s' % exc)
+            try:
+                os.remove(best_path)
+            except OSError:
+                pass
+            best_path = None
+    if best_path:
+        info.update(bytes=best_size, targetReached=best_size <= target_bytes, passes=attempts)
+        if info['targetReached']:
+            progress(0.96, '已达到目标体积：%s' % _fmt_bytes(best_size))
+        else:
+            ctx.warn('无法压到目标体积 %s：最小 %s。文字型 PDF 的可压缩空间有限，已输出最小结果'
+                     % (_fmt_bytes(target_bytes), _fmt_bytes(best_size)))
+        return info
+
+    info.update(bytes=before, targetReached=False, passes=attempts)
+    ctx.warn('无法压到目标体积 %s：输出仍为 %s。文字型 PDF 的可压缩空间有限'
+             % (_fmt_bytes(target_bytes), _fmt_bytes(before)))
+    return info
+
+
+def _attach_fit(record, fit):
+    """Add the optional compression audit fields the client shows on an output."""
+    if not fit:
+        return record
+    record['originalBytes'] = int(fit.get('originalBytes') or 0)
+    record['targetBytes'] = int(fit.get('targetBytes') or 0)
+    record['targetReached'] = bool(fit.get('targetReached'))
+    return record
+
+
+def _apply_size_cap(ctx, path):
+    if not ctx.flag('limitSize', False):
+        return None
+    # The output is never encrypted, so never authenticate it with an input password.
+    return _fit_pdf_to_target(ctx, path, _target_bytes(ctx), password=None)
+
+
 def op_compress(ctx):
     require_fitz()
     path, name = single_input(ctx)
-    doc = open_pdf(path, ctx.password() or None)
-    level = ctx.choice('level', 'medium', ('low', 'medium', 'high'))
+    mode = ctx.choice('mode', 'level', ('level', 'target'))
     try:
         before = os.path.getsize(path)
     except OSError:
         before = 0
     base = base_of(name)
     out = out_path(ctx, base, '_compressed', 'pdf')
+
+    if mode == 'target':
+        target_bytes = _target_bytes(ctx)
+        # Validate the source first (including a password, if one was supplied),
+        # then work on a copy so the staged upload is never modified.
+        probe = open_pdf(path, ctx.password() or None)
+        probe.close()
+        progress(0.08, '正在准备压缩')
+        shutil.copyfile(path, out)
+        fit = _fit_pdf_to_target(ctx, out, target_bytes, password=ctx.password() or None)
+        pages = verify_pdf(out)
+        after = fit.get('bytes') or os.path.getsize(out)
+        ctx.extra_meta['beforeBytes'] = before
+        ctx.extra_meta['afterBytes'] = after
+        ctx.extra_meta['ratio'] = round((after / before), 4) if before else None
+        record = pdf_record(ctx, out, pages)
+        _attach_fit(record, fit)
+        progress(0.97, '压缩完成：%s → %s' % (_fmt_bytes(before), _fmt_bytes(after)))
+        return [make_item(name, [record])]
+
+    doc = open_pdf(path, ctx.password() or None)
+    level = ctx.choice('level', 'medium', ('low', 'medium', 'high'))
     progress(0.08, '正在清理文档结构')
     try:
         if level != 'low':
@@ -2413,7 +2627,10 @@ def op_batchResize(ctx):
             continue
         try:
             out, pages = resize_document(ctx, path, name, doc=source, password=password)
+            # Cap before bundling so the archive holds the capped files.
+            fit = _apply_size_cap(ctx, out)
             record = pdf_record(ctx, out, pages)
+            _attach_fit(record, fit)
             items.append(make_item(name, [record]))
             entries.append((out, os.path.basename(out)))
         except Exception as exc:

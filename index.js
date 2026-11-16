@@ -663,6 +663,9 @@ class Workbench {
         kind: output.kind,
         bytes: output.bytes,
         pages: output.pages,
+        originalBytes: output.originalBytes,
+        targetBytes: output.targetBytes,
+        targetReached: output.targetReached,
         from: output.from,
       })),
       warnings: job.warnings ?? [],
@@ -784,6 +787,11 @@ class Workbench {
       kind: output.kind ?? kindOf(output.name ?? output.path),
       bytes: info.size,
       pages: output.pages,
+      // Set by the engine's optional size cap: lets the result row show
+      // "12.4 MB → 8.9 MB" instead of silently shrinking the file.
+      originalBytes: Number(output.originalBytes) || undefined,
+      targetBytes: Number(output.targetBytes) || undefined,
+      targetReached: typeof output.targetReached === 'boolean' ? output.targetReached : undefined,
       from: from ?? null,
     }
     job.outputs.push(record)

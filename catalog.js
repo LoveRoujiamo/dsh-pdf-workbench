@@ -102,6 +102,43 @@ const ORIENTATION_FIELD = {
   ],
 }
 
+/**
+ * Optional post-processing for operations that emit PDFs: instead of asking the
+ * user to merge/convert and then run a second compression job, the engine can
+ * shrink the result to a target size inside the same job.
+ *
+ * The switch stays off by default so existing output quality never changes
+ * silently; `targetSizeMB` only appears when it is on.
+ */
+const TARGET_SIZE_FIELD = {
+  key: 'targetSizeMB',
+  type: 'number',
+  label: L('目标体积 (MB)', 'Target size (MB)'),
+  default: 10,
+  min: 0.2,
+  max: 100,
+  step: 0.5,
+  visibleWhen: { key: 'limitSize', equals: true },
+  help: L(
+    '每个输出 PDF 的上限；压不到目标时会输出最小结果并在结果区提示',
+    'Per-output PDF cap; if it cannot be reached the smallest result is kept and noted',
+  ),
+}
+
+const OUTPUT_SIZE_FIELDS = [
+  {
+    key: 'limitSize',
+    type: 'switch',
+    label: L('自动压到目标体积', 'Compress to a target size'),
+    default: false,
+    help: L(
+      '结果超过目标体积时自动压缩，无需再单独跑一次「PDF 压缩」；文字保持矢量，图片可能降采样',
+      'Shrink the result in the same job when it exceeds the target; text stays vector, images may be downsampled',
+    ),
+  },
+  TARGET_SIZE_FIELD,
+]
+
 const RESIZE_FIELDS = [
   SIZE_PRESET_FIELD,
   ...CUSTOM_SIZE_FIELDS,
@@ -304,7 +341,7 @@ export const OPERATIONS = [
     id: 'convert.toPDF',
     group: 'convert',
     title: L('多格式转 PDF', 'To PDF'),
-    description: L('Word / Excel / PPT / 图片 / TXT 批量转为 PDF', 'Batch convert Office files, images and text to PDF'),
+    description: L('Word / Excel / PPT / 图片 / TXT 批量转 PDF，可直接限制输出体积', 'Batch convert Office files, images and text to PDF, with an optional size cap'),
     accept: '.doc,.docx,.xls,.xlsx,.ppt,.pptx,.png,.jpg,.jpeg,.webp,.bmp,.tif,.tiff,.txt,.md',
     multiple: true,
     preview: 'pdf',
@@ -328,6 +365,7 @@ export const OPERATIONS = [
           { value: 'Letter', label: 'Letter' },
         ],
       },
+      ...OUTPUT_SIZE_FIELDS,
     ],
   },
 
@@ -337,7 +375,7 @@ export const OPERATIONS = [
     group: 'edit',
     section: L('基础操作', 'Basics'),
     title: L('PDF 合并', 'Merge PDFs'),
-    description: L('多个 PDF 合并为一个，可拖拽调整顺序', 'Combine multiple PDFs, reorder before merging'),
+    description: L('多个 PDF 合并为一个，可拖拽调整顺序并直接限制输出体积', 'Combine multiple PDFs, reorder and cap the output size in one step'),
     accept: '.pdf',
     multiple: true,
     reorder: true,
@@ -345,6 +383,7 @@ export const OPERATIONS = [
     engine: 'merge',
     fields: [
       { key: 'addBookmarks', type: 'switch', label: L('为每个文件生成书签', 'Add a bookmark per file'), default: true },
+      ...OUTPUT_SIZE_FIELDS,
     ],
   },
   {
@@ -404,23 +443,35 @@ export const OPERATIONS = [
     group: 'edit',
     section: L('基础操作', 'Basics'),
     title: L('PDF 压缩', 'Compress PDF'),
-    description: L('低 / 中 / 高三档压缩，在画质与体积间平衡', 'Three compression levels balancing quality and size'),
+    description: L('按低 / 中 / 高三档压缩，或直接指定目标体积', 'Three compression levels, or compress straight to a target size'),
     accept: '.pdf',
     multiple: false,
     preview: 'pdf',
     engine: 'compress',
     fields: [
       {
+        key: 'mode',
+        type: 'radio',
+        label: L('压缩方式', 'Compression mode'),
+        default: 'level',
+        options: [
+          { value: 'level', label: L('按档位压缩', 'By level') },
+          { value: 'target', label: L('压到指定体积', 'To a target size') },
+        ],
+      },
+      {
         key: 'level',
         type: 'radio',
         label: L('压缩等级', 'Compression level'),
         default: 'medium',
+        visibleWhen: { key: 'mode', equals: 'level' },
         options: [
           { value: 'low', label: L('低（画质优先）', 'Low (quality first)'), hint: L('通常缩小 10–30%', 'Usually 10–30% smaller') },
           { value: 'medium', label: L('中（均衡）', 'Medium (balanced)'), hint: L('通常缩小 30–60%', 'Usually 30–60% smaller') },
           { value: 'high', label: L('高（体积最小）', 'High (smallest)'), hint: L('可能影响小字清晰度', 'Small text may soften') },
         ],
       },
+      { ...TARGET_SIZE_FIELD, visibleWhen: { key: 'mode', equals: 'target' } },
       {
         key: 'preserveText',
         type: 'switch',
@@ -573,7 +624,7 @@ export const OPERATIONS = [
     group: 'edit',
     section: L('页面排版', 'Page layout'),
     title: L('批量统一页面尺寸（多文档）', 'Batch resize (multiple documents)'),
-    description: L('批量上传多份 PDF，统一为同一规格，独立输出并打包下载', 'Unify paper size across many PDFs, one output per input, zipped'),
+    description: L('批量上传多份 PDF，统一规格、独立输出并打包，可为每份限制体积', 'Unify paper size across many PDFs, one output per input, with an optional per-file size cap'),
     accept: '.pdf',
     multiple: true,
     batch: true,
@@ -597,6 +648,7 @@ export const OPERATIONS = [
       { key: 'background', type: 'color', label: L('背景色', 'Background colour'), default: '#ffffff' },
       { key: 'keepMetadata', type: 'switch', label: L('保留书签 / 链接 / 批注 / 表单字段', 'Preserve bookmarks, links, annotations and form fields'), default: true },
       { key: 'zipOutput', type: 'switch', label: L('额外打包为压缩包', 'Also bundle a zip archive'), default: true },
+      ...OUTPUT_SIZE_FIELDS,
     ],
   },
   {
