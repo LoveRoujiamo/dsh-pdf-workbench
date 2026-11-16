@@ -1,0 +1,16 @@
+# ── generated Python side (install with scripts/bootstrap.sh; never commit) ──
+engine/runtime/
+__pycache__/
+*.pyc
+*.pyo
+
+# ── test artefacts ──────────────────────────────────────────────────────────
+tests/*.pdf
+tests/*.docx
+tests/*.xlsx
+tests/*.pptx
+
+# ── local noise ─────────────────────────────────────────────────────────────
+.DS_Store
+*.log
+.env

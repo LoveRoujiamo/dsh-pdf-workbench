@@ -1,0 +1,52 @@
+{
+  "name": "@local/pdf-workbench",
+  "version": "1.1.2",
+  "private": true,
+  "description": "PDF 全能工具台：格式转换、页面排版、内容提取与 AI 智能处理的 DSH 本地 PDF 工作台",
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "catalog.js",
+    "client.js",
+    "cordis.patch.yml",
+    "engine/pdf_engine.py",
+    "engine/selftest.py",
+    "locale/*.json",
+    "docs",
+    "scripts",
+    "requirements.txt",
+    "icon.svg"
+  ],
+  "icon": "./icon.svg",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-ui-layout",
+        "@deepseek-ai/dsh-client-ui-sidebar"
+      ]
+    }
+  },
+  "engines": {
+    "dsh": ">=0.2.2-rc.3",
+    "node": ">=22"
+  },
+  "scripts": {
+    "bootstrap": "bash scripts/bootstrap.sh",
+    "verify": "bash scripts/verify.sh",
+    "verify:quick": "bash scripts/verify.sh --quick"
+  }
+}

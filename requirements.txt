@@ -1,0 +1,6 @@
+# Python side of the PDF engine. Installed by scripts/bootstrap.sh into
+# engine/runtime/pylib (development checkout) or $DSH_HOME/pdf-workbench-runtime/pylib
+# (installed package). Versions below are the ones this release was tested with.
+pymupdf==2.1
+reportlab==5.1.0
+rapidocr-onnxruntime==1.4.4

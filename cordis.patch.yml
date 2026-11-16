@@ -1,0 +1,9 @@
+# PDF 全能工具台：本地 PDF 工作台与 AI 文档助手。
+#
+# 本 bundle 只插入一行 Host 插件；浏览器端 UI 由 package.json 的 dsh.client 提供。
+# 没有需要用户手填的配置：AI 功能使用当前会话的默认模型路由
+# （设置 → 模型），PDF 引擎使用随包安装的 PyMuPDF。
+- insert:
+    - id: pdf-workbench
+      name: '@local/pdf-workbench'
+      config: {}

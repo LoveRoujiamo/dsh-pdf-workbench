@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 36 36" role="img" aria-label="PDF workbench">
+  <defs>
+    <linearGradient id="pdfw-front" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3f5bd6"/>
+      <stop offset="1" stop-color="#1f3a93"/>
+    </linearGradient>
+    <clipPath id="pdfw-notch">
+      <path d="M10 5h11l6 6v20H10z"/>
+    </clipPath>
+  </defs>
+  <!-- back sheet: a second page behind, reads as a document stack -->
+  <path d="M7 9.5 9.5 7.5h10l5 5v18.5L22 33.5H9.5z" fill="#1f3a93" opacity="0.28"/>
+  <!-- front sheet -->
+  <path d="M10 5h11l6 6v20H10z" fill="url(#pdfw-front)"/>
+  <!-- folded corner cut-out -->
+  <path d="M21 5l6 6h-6z" fill="#ffffff" opacity="0.55"/>
+  <!-- content rules -->
+  <g fill="#ffffff" opacity="0.92">
+    <rect x="13.5" y="15" width="9" height="1.6" rx="0.8"/>
+    <rect x="13.5" y="19" width="9" height="1.6" rx="0.8"/>
+    <rect x="13.5" y="23" width="5.5" height="1.6" rx="0.8"/>
+  </g>
+  <!-- size-adjust mark: opposing arrows, the workbench's signature action -->
+  <g stroke="#ffffff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <path d="M14.5 28.2h7"/>
+    <path d="M16.4 26.4 14.5 28.2l1.9 1.8"/>
+    <path d="M20.6 26.4 22.5 28.2l-1.9 1.8"/>
+  </g>
+  <g clip-path="url(#pdfw-notch)"/>
+</svg>

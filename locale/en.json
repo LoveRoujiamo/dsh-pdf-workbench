@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "PDF workbench",
+    "description": "One local workbench for PDFs: convert to and from Word, Excel, PowerPoint, images and text; merge, split, compress, protect, rotate and renumber pages; resize every page to a standard paper size, unify sizes across many files, crop white margins, add watermarks and page numbers; OCR, extract images and outlines; and AI summary, Q&A, translation, proofreading and structured extraction.",
+    "detail": "docs/DETAIL.md"
+  }
+}
