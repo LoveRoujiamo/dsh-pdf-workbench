@@ -1,6 +1,6 @@
 {
   "name": "@local/pdf-workbench",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "private": true,
   "description": "PDF 全能工具台：格式转换、页面排版、内容提取与 AI 智能处理的 DSH 本地 PDF 工作台",
   "type": "module",
