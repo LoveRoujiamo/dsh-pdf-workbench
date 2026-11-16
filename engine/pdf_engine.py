@@ -44,7 +44,7 @@ import time
 import traceback
 import zipfile
 
-ENGINE_VERSION = '1.0.0'
+ENGINE_VERSION = '1.1.2'
 
 MM = 72.0 / 25.4          # 1 millimetre in points
 INCH = 72.0               # 1 inch in points

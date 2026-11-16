@@ -10,6 +10,13 @@ tests/*.docx
 tests/*.xlsx
 tests/*.pptx
 
+# ── session import scratch (decompressed transcript, regenerable) ───────────
+_import/
+
+# ── local development transcripts (contain absolute host paths; not published) ─
+docs/HANDOFF.md
+docs/SESSION-*.md
+
 # ── local noise ─────────────────────────────────────────────────────────────
 .DS_Store
 *.log

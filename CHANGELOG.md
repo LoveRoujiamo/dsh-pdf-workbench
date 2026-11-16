@@ -5,6 +5,9 @@
 
 ## 1.1.2
 
+- 统一版本号：Host `VERSION`（`index.js`）、引擎 `ENGINE_VERSION`、`docs/USAGE.md` 抬头
+  此前仍写 1.0.0，现与 `package.json` / 客户端 `CLIENT_BUILD` 一致为 1.1.2。
+- 同步 `docs/HANDOFF.md` 里过时的行数与版本状态说明。
 - 修复：主面板较窄时，首页标题区两栏网格塌陷，标题被压成一字一行。
   - 标题区改为纵向堆叠（标题 → 说明 → 搜索框）；
   - 三栏宽度改为 `clamp()` 自适应，中间列多出约 150px；

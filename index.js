@@ -22,7 +22,7 @@ import { randomUUID } from 'node:crypto'
 
 import { catalogView, findOperation, LIMITS } from './catalog.js'
 
-const VERSION = '1.0.0'
+const VERSION = '1.1.2'
 const HERE = dirname(fileURLToPath(import.meta.url))
 const ENGINE = join(HERE, 'engine', 'pdf_engine.py')
 const API = '/api/pdf-workbench'
