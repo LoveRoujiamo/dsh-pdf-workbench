@@ -29,7 +29,7 @@ window.__ModuleLoader__.load({
 
     /** Bumped on every client change: the only reliable way to tell which
      *  bundle the page is running (the module is loaded once per page load). */
-    var CLIENT_BUILD = "v1.3.1"
+    var CLIENT_BUILD = "v1.3.2"
 
     var API_BASE = "/api/pdf-workbench"
 
@@ -4079,7 +4079,7 @@ background:var(--pdfw-page)
 .pdfw-col--left{background:linear-gradient(180deg,var(--pdfw-rail) 0%,var(--dsw-alias-bg-layer-1,#f7f1e8) 100%);border-right:1px solid var(--pdfw-border);padding:16px 12px 20px;gap:12px;box-shadow:inset -1px 0 0 rgba(255,255,255,.55),inset 0 1px 0 rgba(255,255,255,.6)}
 .pdfw-rail{border-left:0;color:var(--pdfw-rail-text)}
 /* ── brand ───────────────────────────────────────────────────────────────── */
-.pdfw-brand-row{gap:10px;min-height:38px;padding:2px 4px 4px}
+.pdfw-brand-row{gap:10px;min-height:38px;padding:2px 4px 6px;margin-top:10px}
 .pdfw-brand-icon{width:32px;height:32px;border-radius:10px;background:linear-gradient(135deg,#f0a03a,#c2410c);color:#fff;box-shadow:0 6px 16px -8px rgba(194,65,12,.9)}
 .pdfw-brand-title{color:var(--pdfw-ink);font-size:14px;font-weight:680;letter-spacing:-.01em}
 .pdfw-brand-sub{color:var(--pdfw-rail-muted)}
@@ -4257,6 +4257,9 @@ background:var(--pdfw-page)
 .pdfw-right-title{font-size:10.5px}
 /* keep the narrow-viewport behaviour the earlier rule intended: my clamp
    rules sit after those media queries, so re-assert the collapsed track. */
+/* When the DSH sidebar is collapsed the main panel sits at the window's left
+   edge, under the traffic lights; clear the titlebar strip only in that case. */
+[data-sidebar-collapsed] .pdfw-col--left{padding-top:calc(16px + var(--dsh-frame-top-clearance,0px))}
 @media (max-width:880px){.pdfw-root{--pdfw-left:200px;--pdfw-right:0px}.pdfw-home-head>.pdfw-search{max-width:none}}
 `
 
